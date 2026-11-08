@@ -2,12 +2,16 @@
   "id": "splatter",
   "title": "Splatfinder (Splatter)",
   "description": "<p>Blood up your games</p>",
-  "version": "7.0.2 (forked)",
+  "version": "7.1.1 (forked)",
   "authors": [
     {
       "name": "theripper93",
       "email": "tsplab@gmail.com",
       "url": "https://www.patreon.com/theripper93",
+      "flags": {}
+    }
+    {
+      "name": "V vix",
       "flags": {}
     }
   ],
