@@ -1,5 +1,4 @@
 import {Socket} from "./lib/socket.js";
-import { SystemAdapter } from "./SystemAdapter.js";
 
 export class BloodSplatter {
   constructor() {
@@ -309,13 +308,43 @@ export class BloodSplatter {
   }
 
   static belowTreshold(actor) {
-    const health = BloodSplatter.getHealthPercent(actor);
-    return health !== undefined && health <= game.settings.get("splatter", "bloodsplatterThreshold");
+    if (!actor) return false;
+    const hpMax = BloodSplatter.getHpMax(actor);
+    const hpVal = BloodSplatter.getHpVal(actor);
+    const useWounds = game.settings.get("splatter", "useWounds");
+    const threshold = useWounds ? (100 * (hpMax - hpVal)) / hpMax : (100 * hpVal) / hpMax;
+    if (
+      threshold <=
+      game.settings.get("splatter", "bloodsplatterThreshold")
+    )
+      return true;
+    return false;
   }
-
   static getHealthPercent(actor) {
-    const percent = SystemAdapter.getHealthPercent(actor);
-    return percent == null ? undefined : percent * 100;
+    const hpMax = BloodSplatter.getHpMax(actor);
+    const hpVal = BloodSplatter.getHpVal(actor);
+    if (!hpMax || !Number.isFinite(hpVal)) return undefined;
+    const useWounds = game.settings.get("splatter", "useWounds");
+    const percent = useWounds ? (100 * (hpMax - hpVal)) / hpMax : (100 * hpVal) / hpMax;
+    return Math.clamp(percent, 0, 100);
+  }
+  static getHpVal(actor) {
+    return foundry.utils.getProperty(
+      actor.system ?? actor,
+      game.settings.get("splatter", "currentHp")
+    );
+  }
+  static getHpMax(actor) {
+    return foundry.utils.getProperty(actor.system ?? actor, game.settings.get("splatter", "maxHp"));
+  }
+  static getCreatureType(actorData) {
+    return foundry.utils.getProperty(actorData.system, game.settings.get("splatter", "creatureType")) ?? actorData.type;
+  }
+  static getCreatureTypeCustom(actorData) {
+    return foundry.utils.getProperty(
+      actorData.system,
+      game.settings.get("splatter", "creatureTypeCustom")
+    );
   }
   static getCreatureTypes(actorData) {
     return [BloodSplatter.getCreatureTypeCustom(actorData), BloodSplatter.getCreatureType(actorData)]
@@ -383,11 +412,37 @@ export class BloodSplatter {
       });
     }
   }
-  static getImpactScale(actor, oldHealth) {
-    const health = BloodSplatter.getHealthPercent(actor);
-    if (health === undefined || oldHealth == null || !(health < oldHealth)) return false;
-    if (health > game.settings.get("splatter", "bloodsplatterThreshold")) return false;
-    return (oldHealth - health) / 100 + 0.7;
+  static getImpactScale(actor, updates, diff){
+    const useWounds = game.settings.get("splatter", "useWounds")
+    return useWounds ? BloodSplatter.getImpactScaleWounds(actor, updates, diff) : BloodSplatter.getImpactScaleStandard(actor, updates, diff);
+  }
+  static getImpactScaleStandard(actor, updates, diff) {
+    const hpMax = BloodSplatter.getHpMax(actor);
+    const oldHpVal = diff.oldHpVal; //BloodSplatter.getHpVal(actor.data);
+    const hpVal = BloodSplatter.getHpVal(updates);
+    const impactScale = (oldHpVal - hpVal) / hpMax + 0.7;
+    if (hpVal != undefined &&
+      hpVal <= oldHpVal &&
+      (100 * hpVal) / hpMax <=
+      game.settings.get("splatter", "bloodsplatterThreshold")) {
+      return impactScale;
+    }else{
+      return false;
+    }
+  }
+  static getImpactScaleWounds(actor, updates, diff) {
+    const hpMax = BloodSplatter.getHpMax(actor);
+    const oldHpVal = diff.oldHpVal; //BloodSplatter.getHpVal(actor.data);
+    const hpVal = BloodSplatter.getHpVal(updates);
+    const impactScale = (hpVal - oldHpVal) / hpMax + 0.7;
+    if (hpVal != undefined &&
+      hpVal >= oldHpVal &&
+      (100 * (hpMax - hpVal)) / hpMax <=
+      game.settings.get("splatter", "bloodsplatterThreshold")) {
+      return impactScale;
+    }else{
+      return false;
+    }
   }
   static executeSplat(token, impactScale) {
     const delay = game.settings.get("splatter", "bloodsplatterDelay");
